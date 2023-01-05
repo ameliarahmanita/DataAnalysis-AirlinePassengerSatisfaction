@@ -1,0 +1,456 @@
+---
+title: "Study Case 1 - Classification of Airline Passengers Satisfaction"
+author: "IS388 - A2"
+date: "september2021"
+output: 
+  html_document: 
+    number_sections: yes
+  pdf_document: 
+    toc: yes
+    toc_depth: 4
+    number_sections: yes
+    keep_tex: yes
+  word_document: 
+    toc: yes
+    toc_depth: 4
+    highlight: tango
+    keep_md: yes
+---
+
+## Loading Library
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(knitr) 
+library(readxl) # Reading Excel
+library(Amelia) # Missing Data : Missings Map
+library(dplyr) # Data Manipulation
+library(hablar) # Column Type Converter
+library(ggplot2) # Data Visualization
+library(klaR) # Classification : Naive Bayes
+library(caret) # Making Confusion Matrix
+library(party) # Classification : Decision Tree
+library(rpart) # Classification : Decision Tree
+library(rpart.plot) # Plotting RPART Decision Tree
+library(car) # Checking multicollinearity
+library(ROCR) # Making ROC Curve
+library(AICcmodavg) # Calculating the AIC value
+library(InformationValue) #Creating the ROC curve
+library(pROC) #Calculating the AUC value
+library(randomForest) # Classification : Random Forest
+library(class) # Classification : K-Nearest Neighbor
+```
+
+
+## Preparing and Cleaning Data
+
+"Airline Passengers Satisfaction" data description.
+
+The following is a data about airline passengers satisfaction with the services provided by the airline
+We obtained this data from Kaggle (https://www.kaggle.com/sjleshrac/airlines-customer-satisfaction)
+
+This data shows whether a customer is satisfied with the airlines or not after travelling with them. There are several other measurement or to say feedback taken from the customers as well as their demographic data is also recorded.
+
+The dataset consists of 23 variables which are :
+
+1.  Satisfaction(satisfaction) : Airline satisfaction level(Satisfaction and dissatisfaction)
+2.  Gender(gender) : Gender of the passengers (Female, Male)
+3.  Customer Type(customerType) : The customer type (Loyal customer, disloyal customer)
+4.  Age(age) : The actual age of the passengers
+5.  Type of Travel(travelType) : Purpose of the flight of the passengers (Personal Travel, Business Travel)
+6.  Class(class) : Travel class in the plane of the passengers (Business, Eco, Eco Plus)
+7.  Flight distance(flightDistance) : The flight distance of this journey
+8.  Seat comfort(seatComfort) : Satisfaction level of Seat comfort (0: Not Applicable; 1-5)
+9.  Departure/Arrival time convenient(timeConvenient) : Satisfaction level of Departure/Arrival time convenient
+10. Food and drink(foodDrink) : Satisfaction level of Food and drink
+11. Gate location(gateLocation) : Satisfaction level of Gate location
+12. Inflight wifi service(wifiService) : Satisfaction level of the inflight wifi service 
+13. Inflight entertainment(inflightEntertainment) : Satisfaction level of inflight entertainment
+14. Online Support(onlineSupport) : satisfaction level of Online Support
+15. Ease of Online booking(onlineBooking) : Satisfaction level of online booking
+16. On-board service(onboardService) : Satisfaction level of On-board service
+17. Leg room service(legRoom) : Satisfaction level of Leg room service
+18. Baggage handling(baggageHandling) : Satisfaction level of baggage handling
+19. Check-in service(checkinService) : Satisfaction level of Check-in service
+20. Cleanliness(cleanliness) : Satisfaction level of Cleanliness
+21. Online boarding(onlineBoarding) : Satisfaction level of online boarding
+22. Departure Delay in Minutes(departureDelay) : Minutes delayed when departure
+23. Arrival Delay in Minutes(arrivalDelay): Minutes delayed when Arrival
+
+The purpose of this project is to build a classification model for airline's customer satisfaction by using 5 algorithms, which are : Naive bayes, Decision Tree, Logistic Regression, Random Forest, and K-Nearest Neighbors.
+
+```{r}
+#--------------------------Data Introduction--------------------------
+# Reading dataset and saving it into 'A2' variable
+A2 <- read_excel("A2.xlsx", sheet = "edited")
+
+# Checking the structure of the data
+str(A2)
+
+# Displaying the first few rows of the data
+head(A2)
+
+# Showing the summary of the data
+summary(A2)
+
+#------------------------Handling Missing Data------------------------
+# Checking missing values (missing values or empty values) before Omitting NAs
+colSums(is.na(A2) | A2 == '')
+
+# Visualize the missing data before Omitting NAs
+missmap(A2, legend = TRUE, main = "Visualize Missing Observation\nbefore Omitting NAs")
+
+# Removing the missing value (NAs)
+A2 <-na.omit(A2)
+# We remove the missing value because the NAs are too little compare to the whole data
+
+# Checking missing values (missing values or empty values) after Omitting NAs
+colSums(is.na(A2) | A2 == '')
+
+# Visualize the missing data after Omitting NAs
+missmap(A2, legend = TRUE, main = "Visualize Missing Observation\nafter Omitting NAs")
+
+#------------------------Manipulating Data Type-----------------------
+# Changing the target variable into binary.
+A2_new <- A2 %>%
+  dplyr :: mutate(satisfaction_int = ifelse(satisfaction == "satisfied", 1, 0)) %>%
+  dplyr :: select (-satisfaction) %>%
+  convert(num(satisfaction_int)) %>%
+  na.omit()
+
+
+# Changing the char data type as factor
+#----- gender variable
+A2_new$gender <- as.factor(A2_new$gender)
+A2_new$gender <- factor(A2_new$gender, levels = c("Male", "Female"))
+unclass(A2_new$gender)
+
+#----- customerType variable
+A2_new$customerType <- as.factor(A2_new$customerType)
+A2_new$customerType <- factor(A2_new$customerType, levels = c("Loyal Customer", "disloyal Customer"))
+unclass(A2_new$customerType)
+
+#----- travelType variable
+A2_new$travelType <- as.factor(A2_new$travelType)
+A2_new$travelType <- factor(A2_new$travelType, levels = c("Personal Travel", "Business travel"))
+unclass(A2_new$travelType)
+
+#----- class variable
+A2_new$class <- as.factor(A2_new$class)
+A2_new$class <- factor(A2_new$class, levels = c("Eco", "Eco Plus","Business"))
+unclass(A2_new$class)
+
+# Checking the class of each variable in the data (data type) after changing chr to factor
+str(A2_new)
+
+# Changing the factor data type as numeric
+A2_new <- A2_new %>% dplyr :: mutate_if(is.factor, as.numeric)
+
+# Checking the class of each variable in the data (data type) after changing everything to factor
+sapply(A2_new, class)
+
+```
+
+
+## Data Visualization; Exploratory Data Analysis
+```{r}
+#-----------------------------Preparation-----------------------------
+# Changing the char data type as factor
+str(A2)
+
+#----- satisfaction variable
+A2$satisfaction <- as.factor(A2$satisfaction)
+A2$satisfaction <- factor(A2$satisfaction, levels = c("satisfied", "dissatisfied"))
+
+#----- gender variable
+A2$gender <- as.factor(A2$gender)
+A2$gender <- factor(A2$gender, levels = c("Male", "Female"))
+
+#----- customerType variable
+A2$customerType <- as.factor(A2$customerType)
+A2$customerType <- factor(A2$customerType, levels = c("Loyal Customer", "disloyal Customer"))
+
+#----- travelType variable
+A2$travelType <- as.factor(A2$travelType)
+A2$travelType <- factor(A2$travelType, levels = c("Personal Travel", "Business travel"))
+
+#----- class variable
+A2$class <- as.factor(A2$class)
+A2$class <- factor(A2$class, levels = c("Eco", "Eco Plus","Business"))
+
+#----------------------------Visualization----------------------------
+# Categorical type ---------------------------------------------------
+tab1 <-table(A2$satisfaction)
+barplot(tab1, main = "Satisfaction Barplot", col = rainbow(2), ylim = c(0,80000))
+# CONCLUSION : frequency of Satisfied > Dissatisfied
+
+tab2 <- table(A2$gender, A2$satisfaction)
+barplot(tab2, main = "Satisfaction by Gender Barplot", horiz = FALSE, xlab = "Gender", ylab = "Frequency", ylim = c(0,60000), col = rainbow(2), legend = rownames(A2$gender), beside = TRUE, legend.text = c("1 = Male", "2 = Female"))
+# CONCLUSION : women are mostly satisfied and men are mostly dissatisfied
+
+tab3 <- table(A2$customerType, A2$satisfaction)
+barplot(tab3, main = "Satisfaction by Customer Type Barplot", horiz = FALSE, xlab = "Customer Type", ylab = "Frequency", ylim = c(0,80000), col = rainbow(2), legend = rownames(A2$customerType), beside = TRUE, legend.text = c("1 = Loyal Customer", "2 = Disloyal Customer"))
+# CONCLUSION : the customer are mostly satisfied and there are more loyal customer than disloyal customer in general
+
+tab4 <- table(A2$travelType, A2$satisfaction)
+barplot(tab4, main = "Satisfaction by Travel Type Barplot", horiz = FALSE, xlab = "Travel Type", ylab = "Frequency", ylim = c(0,70000), col = rainbow(2), legend = rownames(A2$travelType), beside = TRUE, legend.text = c("1 = Personal Travel", "2 = Business Travel"))
+# CONCLUSION : the customer are mostly satisfied and there are more business travel type than personal travel in general
+
+tab5 <- table(A2$class, A2$satisfaction)
+barplot(tab5, main = "Satisfaction by Travel Class Barplot", horiz = FALSE, xlab = "Travel Class", ylab = "Frequency", ylim = c(0,60000), col = rainbow(3), legend = rownames(A2$class), beside = TRUE, legend.text = c("1 = Eco", "2 = Eco Plus", "3 = Business"))
+# CONCLUSION : the business class type are mostly satisfied and the eco class type are mostly dissatisfied; also the eco plus class type is fewer than the other two class type in general
+
+# Categorical x Numerical type ---------------------------------------
+boxplot(A2$age ~ A2$satisfaction, main = "Satisfaction by Age Boxplot", xlab = "Satisfaction", ylab = "Age", col = rainbow(2))
+# CONCLUSION : The average age of satisfied customers is higher than the average of dissatisfied customers. This means the satisfied customers are older on average than the dissatisfied customers
+
+boxplot(A2$flightDistance ~ A2$satisfaction, main = "Satisfaction by Flight Distance Boxplot", xlab = "Satisfaction", ylab = "Flight Distance", col = rainbow(2))
+# CONCLUSION : The average distance is quite similar for both satisfied and dissatisfied customer. But, the satisfied customers have wider box and whiskers; this means the range of their flight distance varies more than the dissatisfied customers.
+
+```
+
+
+## Data Classification : Using 5 Algorithms
+
+### Preparing Stage
+```{r}
+#----------------------------Splitting Data---------------------------
+# Split data Training and Testing 80 : 20
+Rand <- 16098 # 5 digit
+set.seed(Rand) # setting seed
+
+samp <- sample(nrow(A2_new), 0.8 * nrow(A2_new), replace = FALSE)
+
+trainData <- A2_new[samp, ] #for training 
+nrow(trainData)
+prop.table(table(trainData$satisfaction_int)) * 100
+
+testData <- A2_new[-samp, ] #for testing
+nrow(testData)
+prop.table(table(testData$satisfaction_int)) * 100
+
+```
+
+### Algorithm 1 (Logistic Regression)
+```{r}
+#------------------MULTICOLLINEARITY CHECKING-------------------------
+model <- glm(satisfaction_int ~ ., data = A2_new, family = "binomial")
+car :: vif(model)
+
+# There are multicollinearity in the variable arrivalDelay and departureDelay because the VIF value is not in between 1-5 range
+
+#---------------------------LOGREG MODEL 1----------------------------
+# Fitting the logistic regression model ------------------------------
+log_model1 <- glm(satisfaction_int ~  gender + customerType  + age + travelType + class + flightDistance + seatComfort + timeConvenient + foodDrink + gateLocation + wifiService + inflightEntertainment + onlineSupport + onlineBooking + onboardService + legRoom + baggageHandling + checkinService + cleanliness + onlineBoarding, data = trainData, family = "binomial")
+summary(log_model1)
+
+# All the variables are very significant
+
+# Making the prediction using data testing ---------------------------
+log_pred1 <- predict(log_model1, testData, type = "response")
+
+y_pred_num1 <- ifelse(log_pred1 > 0.5, 1, 0)
+y_pred1 <- factor(y_pred_num1, levels=c(0,1))
+y_act1 <- testData$satisfaction_int
+mean(y_pred1 == y_act1)
+
+# The prediction's quality is : 0.834659 = 83.46%
+
+#---------------------------LOGREG MODEL 2----------------------------
+#We include departureDelay in the model2 and didn't include arrivalDelay -> because they are probably related to each other, that's why they have high VIF value (more than 1-5)
+#We only pick one of the two 'multicollinearity variables' and discard the other that was diagnosed 'yes' for having multicollinearity.
+
+# Fitting the logistic regression model ------------------------------
+log_model2 <- glm(satisfaction_int ~  gender + customerType  + age + travelType + class + flightDistance + seatComfort + timeConvenient + foodDrink + gateLocation + wifiService + inflightEntertainment + onlineSupport + onlineBooking + onboardService + legRoom + baggageHandling + checkinService + cleanliness + onlineBoarding + departureDelay, data = trainData, family = "binomial")
+summary(log_model2)
+
+# All the variables are very significant
+
+# Making the prediction using data testing ---------------------------
+log_pred2 <- predict(log_model2, testData, type = "response")
+
+y_pred_num2 <- ifelse(log_pred2 > 0.5, 1, 0)
+y_pred2 <- factor(y_pred_num2, levels=c(0,1))
+y_act2 <- testData$satisfaction_int
+mean(y_pred2 == y_act2)
+
+# The prediction's quality is : 0.8366 = 83.66%
+
+#---------------------COMPARING THE LOGISTIC MODEL--------------------
+# Checking the multicollinearity of the model ------------------------
+car :: vif(log_model1)
+car :: vif(log_model2)
+
+# There isn't any multicollinearity in any of the model
+
+# Calculating the AIC value ------------------------------------------
+models <- list(log_model1, log_model2) 
+model.names <- c('log_model1', 'log_model2') 
+AICcmodavg :: aictab(cand.set = models, modnames = model.names)
+
+# The AIC value of model2 (79900.32) is lower than model1 (80350.65)
+
+# Making the Confusion Matrix ----------------------------------------
+log_tab1 <- table(y_pred1, testData$satisfaction_int)
+(log_cm1 <- caret :: confusionMatrix(log_tab1))
+
+log_tab2 <- table(y_pred2, testData$satisfaction_int)
+(log_cm2 <- caret :: confusionMatrix(log_tab2))
+
+# The accuracy of model2 (0.8366 = 83.66%) is higher than model1 (0.834659 = 83.46%)
+
+# Plotting the ROC curve ---------------------------------------------
+InformationValue :: plotROC(testData$satisfaction_int, log_pred1)
+InformationValue :: plotROC(testData$satisfaction_int, log_pred2)
+
+# The ROC plot of model2 is better than model1
+
+# Calculating the AUC value ------------------------------------------
+pROC :: auc(testData$satisfaction_int, log_pred1)
+pROC :: auc(testData$satisfaction_int, log_pred2)
+
+# The AUC of model2 (0.9072) is higher than model1 (0.9063)
+
+# CONCLUSION : the better model is model2 (log_model2) with 0.8366 accuracy
+
+```
+
+### Algorithm 2 (K-Nearest Neighbors)
+```{r}
+# Making the KNN model -----------------------------------------------
+trainKNN <- scale(x = trainData)
+testKNN <- scale(x = testData, center = attr(trainKNN, "scaled:center"), scale = attr(trainKNN, "scaled:scale"))
+
+round(sqrt(nrow(A2_new)))
+
+knn_model <- knn(train = trainKNN, test = testKNN, cl = trainData$satisfaction_int, k = 360)
+
+knn_model <- as.factor(knn_model)
+
+# Making the Confusion Matrix ----------------------------------------
+(knn_cm <- caret::confusionMatrix(data = knn_model, reference = as.factor(testData$satisfaction_int), positive = "1"))
+
+# CONCLUSION : the accuracy for KNN algorithm is 0.9785 
+
+```
+
+
+### Algorithm 3 (Naive Bayes)
+```{r}
+#--Changing the target variable in trainData and testData as factor---
+trainData$satisfaction_int <- as.factor(trainData$satisfaction_int)
+testData$satisfaction_int <- as.factor(testData$satisfaction_int)
+
+#-----------------------NBC for satisfaction_int----------------------
+str(trainData)
+nb_model <- NaiveBayes(satisfaction_int ~ ., data = trainData) #NB classifier model 
+nb_pred <- predict(nb_model, testData) #test model to data testing
+
+#--------------------Naive Bayes' Model Evaluation--------------------
+# Making the Confusion Matrix
+nb_table <- table(nb_pred$class, testData$satisfaction_int) #tabulate class
+(nb_cm <- caret::confusionMatrix(nb_table)) #creating Confusion Matrix
+
+# Plot the Confusion Matrix
+testData$nb_pred <- nb_pred$class 
+ggplot(testData, aes(satisfaction_int, nb_pred, color = satisfaction_int)) + 
+  geom_jitter(width = 0.2, height = 0.1, size=2) + 
+  labs(title = "Confusion Matrix for Naive Bayes", 
+       subtitle = "Predicted vs. Observed from A2 dataset", 
+       y = "Predicted", x = "Truth", caption = "by IS388A - A2 group")
+
+# CONCLUSION : the accuracy for Naive Bayes algorithm is 0.8155
+
+```
+
+### Algorithm 4 (Decision Tree)
+```{r fig, fig.height = 8, fig.width = 25}
+
+#-------------------Decision Tree using Package PARTY-----------------
+# Making the decision tree
+party_model <- ctree(satisfaction_int ~ ., data = trainData)
+plot(party_model, type = "simple")
+print(party_model)
+
+# Predicting testData dataset with trainData result
+party_pred <- predict(party_model, testData, type = "response")
+
+# Plotting the result of prediction tabulation
+plot(party_pred, type = "simple", ylim = c(0,80000))
+
+# Making the Confusion Matrix
+party_table <- table(party_pred, testData$satisfaction_int)
+(party_cm <- caret::confusionMatrix(party_table)) #creating Confusion Matrix
+
+# CONCLUSION : the accuracy for Decision Tree using Package PARTY is 0.9347 
+```
+
+```{r}
+#----------------------Decision Tree using RPART----------------------
+# Making the desicion tree
+rpart_model <- rpart(satisfaction_int ~ ., data = trainData)
+
+# Plotting the result of prediction tabulation
+rpart.plot(rpart_model, box.palette = "RdBu", shadow.col = "grey", nn = TRUE)
+
+# Printing the decision tree model
+print(rpart_model)
+
+# Predicting testData dataset with trainData result
+rpart_pred <- predict(rpart_model, testData, type = "class")
+
+# Making the Confusion Matrix
+rpart_table <- table(rpart_pred, testData$satisfaction_int) #tabulate class
+(rpart_cm <- caret::confusionMatrix(rpart_table)) #creating Confusion Matrix
+
+# CONCLUSION : the accuracy for Decision Tree using RPART is 0.8654
+
+#------------Comparing Decision Tree using PARTY and RPART------------
+(party_accuracy <- party_cm$overall[1])
+(rpart_accuracy <- rpart_cm$overall[1])
+
+# CONCLUSION about Decision Tree Algorithms : the better model is Decision Tree using Package PARTY with 0.9347 accuracy
+
+```
+
+
+### Algorithm 5 (Random Forest)
+```{r}
+# Making Random Forest model -----------------------------------------
+rf_model <- randomForest(satisfaction_int ~ ., data = trainData, importance = TRUE)
+print(rf_model)
+
+# Making the prediction using data testing ---------------------------
+rf_pred <- predict(rf_model, testData)
+
+# Making the Confusion Matrix ----------------------------------------
+(rf_cm <- caret::confusionMatrix(rf_pred, testData$satisfaction_int))
+
+# CONCLUSION : the accuracy for Random Forest algorithm is 0.9572 
+
+```
+
+### Comparing the 5 Algorithms
+```{r}
+#-----------------------------Naive Bayes-----------------------------
+(nb_accuracy <- nb_cm$overall[1])
+
+#----------------------------Decision Tree----------------------------
+(party_accuracy <- party_cm$overall[1])
+
+#-------------------------Logistic Regression-------------------------
+(log_accuracy <- log_cm2$overall[1])
+
+#----------------------------Random Forest----------------------------
+(rf_accuracy <- rf_cm$overall[1])
+
+#--------------------------K-Nearest Neighbors-------------------------
+(knn_accuracy <- knn_cm$overall[1])
+
+# CONCLUSION : the best algorithm for classifying A2 dataset is K-Nearest Neighbors algorithm with 0.9784925 or 97.85% accuracy
+
+```
+
+
+
